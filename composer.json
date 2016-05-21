@@ -2,7 +2,7 @@
     "name": "ezzing/email-template-manager",
     "description": "Create, save, and edit your own email templates, and then send them to anybody whenever you need it",
     "homepage": "https://github.com/ezzing/email-template-manager",
-    "keywords": ["email", "template"],
+    "keywords": ["email", "template", "email template", "template manager"],
     "license": "MIT",
     "authors": [
         {
@@ -14,6 +14,6 @@
 	    "email": "rubenrodriguezfdz@gmail.com"
 	}
     ],
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "require": {}
 }
