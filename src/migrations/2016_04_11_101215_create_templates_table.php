@@ -32,6 +32,6 @@ class CreateTemplatesTable extends Migration
      */
     public function down()
     {
-        Schema::drop('templates');
+        Schema::drop('ezz_templates');
     }
 }

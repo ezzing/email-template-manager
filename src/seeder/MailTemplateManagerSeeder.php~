@@ -1,12 +1,12 @@
 <?php
 
-use App\Models\Template;
-use App\Models\Language;
-use App\Models\LanguageKey;
-use App\Models\LanguageText;
+use App\Models\Ezz_template;
+use App\Models\Ezz_language;
+use App\Models\Ezz_languageKey;
+use App\Models\Ezz_languageText;
 use Illuminate\Database\Seeder;
 
-
+//dsdsdsdsds
 class MailTemplateManagerSeeder extends Seeder
 {
     /**

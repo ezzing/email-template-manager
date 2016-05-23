@@ -7,10 +7,10 @@
  */
 
 namespace App\Models;
-
+//try
 use Illuminate\Database\Eloquent\Model;
 
-class ezz_language extends Model
+class Ezz_language extends Model
 {
 
 // MASS ASSIGNMENT -------------------------------------------------------
