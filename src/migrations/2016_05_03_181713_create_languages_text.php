@@ -32,6 +32,6 @@ class CreateLanguagesText extends Migration
      */
     public function down()
     {
-        Schema::drop('languages_text');
+        Schema::drop('ezz_languages_text');
     }
 }

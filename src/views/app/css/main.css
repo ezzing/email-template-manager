@@ -1,6 +1,22 @@
 body {
   padding-right: 0px !important;
 }
+body #templateGenerator {
+  @keyframes makeArrowVisible {
+    0% {
+      opacity: 0;
+    }
+
+    50% {
+      opacity: 0.5;
+    }
+
+    100% {
+      opacity: 1;
+    }
+}
+
+}
 body #templateGenerator #templateGeneratorHeader {
   border: 1px solid grey;
   min-height: 10vh;
@@ -88,17 +104,7 @@ body #templateGenerator #templateGeneratorBody #templateGeneratorMain .tinymceWi
 body #templateGenerator .gridster-item-resizable-handler, body #templateGenerator .handle-se {
   border-color: transparent transparent black;
 }
-@keyframes makeArrowVisible {
-  0% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
-}
+
 #emailGenerator #emailGeneratorHeader {
   background-color: #000066;
   color: white;

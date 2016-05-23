@@ -28,6 +28,6 @@ class CreateLanguagesKeysTable extends Migration
      */
     public function down()
     {
-        Schema::drop('languages_keys');
+        Schema::drop('ezz_languages_keys');
     }
 }

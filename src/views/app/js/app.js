@@ -22,10 +22,9 @@
 (function () {
     'use strict';
     angular.module('mailTemplate').controller('mailGeneratorCtrl', mailGeneratorCtrl);
-    mailGeneratorCtrl.$inject = ['$scope', '$http', '$translate'];
+    mailGeneratorCtrl.$inject = ['$scope', '$http', '$translate', '$sce'];
 
-    function mailGeneratorCtrl ($scope, $http, $translate) {
-
+    function mailGeneratorCtrl ($scope, $http, $translate, $sce) {
         // Declaring all scope methods
         $scope.loadTemplates = loadTemplates;
         $scope.loadTemplate = loadTemplate;
@@ -36,12 +35,13 @@
         $scope.changeVariables = changeVariables;
         $scope.closeDropdown = closeDropdown;
         $scope.sendOnEnter = sendOnEnter;
-
+        $scope.loadVariables = loadVariables;
 
         // Declaring all scope properties
         $scope.selectedTemplate = null;
         $scope.templateVariables = null;
         $scope.templateList = null;
+        $scope.actualTemplate = null;
         $scope.data = {
             'languages': [
                 {'value': 'en', 'name': 'english'},
@@ -59,9 +59,40 @@
                 $scope.templateList = response.data.templates;
             });
         }
+
+        /**
+         * chargeVariables: Searchs for '{{' on template content, because this is how variables are identified. If some result
+         * is found, content between '{{' and '}}' is stored on $scope.templateVariables. Each variable
+         * needs to be stored as an array with two elements to use them for label and input
+         * tags separately, so them not get binded through angular.
+         * 
+         * @param {string} htmlTemplate: html of the selected template
+         * 
+         * @return {string} htmlTemplate: html of the selected template with the setted variables
+         */
+        function loadVariables (htmlTemplate) {
+
+            // Remove possible variables saved from previous template
+            $scope.templateVariables = [];
+
+            if (htmlTemplate.search('{{') !== -1) {
+                var startOfVariable = null;
+                var endOfVariable = null;
+                var variable = null;
+                do {
+                    startOfVariable = htmlTemplate.search('{{');
+                    endOfVariable = htmlTemplate.search('}}');
+                    variable = htmlTemplate.substring(startOfVariable + 2, endOfVariable);
+                    $scope.templateVariables.push([variable, variable]);
+                    htmlTemplate = htmlTemplate.substring(0, startOfVariable) +
+                        '<label for=' + variable + ' class="variables">' + variable + '</label>' +
+                        htmlTemplate.substring(endOfVariable + 2, htmlTemplate.length);
+                } while (htmlTemplate.search('{{') !== -1);
+            }
+            return htmlTemplate;
+        }
         
-        
-        /*
+        /**
          * loadTemplate : loads clicked template on #actualTemplate container, checks for variables
          * on it, and loads them on dropdown menu.
          *
@@ -73,30 +104,11 @@
             $http.get('getTemplate/' + templateId).then(function (response) {
                 // Stores template content
                 var htmlTemplate = response.data.templates || '<h1> No template received from server</h1>';
-                // Remove possible variables saved from previous template
-                $scope.templateVariables = [];
-                /*
-                 * Searchs for '{{' on template content, because this is how variables are identified. If some result
-                 * is found, content between '{{' and '}}' is stored on $scope.templateVariables. Each variable
-                 * needs to be stored as an array with two elements to use them for label and input
-                 * tags separately, so them not get binded through angular.
-                 */
-                if (htmlTemplate.search('{{') !== -1) {
-                    var startOfVariable = null;
-                    var endOfVariable = null;
-                    var variable = null;
-                    do {
-                        startOfVariable = htmlTemplate.search('{{');
-                        endOfVariable = htmlTemplate.search('}}');
-                        variable = htmlTemplate.substring(startOfVariable + 2, endOfVariable);
-                        $scope.templateVariables.push([variable, variable]);
-                        htmlTemplate = htmlTemplate.substring(0, startOfVariable) +
-                            '<label for=' + variable + ' class="variables">' + variable + '</label>' +
-                            htmlTemplate.substring(endOfVariable + 2, htmlTemplate.length);
-                    } while (htmlTemplate.search('{{') !== -1);
-                }
+
+                htmlTemplate = loadVariables(htmlTemplate);
+
                 // Loads template content on #actualTemplate container
-                $('#actualTemplate').html(htmlTemplate);
+                $scope.actualTemplate = $sce.trustAsHtml(htmlTemplate);
             });
         }
         
@@ -130,6 +142,7 @@
          */
         function changeLanguage (lang) {
             $translate.use(lang.value);
+            $scope.data.selectedLanguage.value = lang;
         }
         
         
@@ -405,6 +418,7 @@
          */
         function changeLanguage (lang) {
             $translate.use(lang.value);
+            $scope.data.selectedLanguage.value = lang;
         }
         
         

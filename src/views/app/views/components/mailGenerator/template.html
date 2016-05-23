@@ -4,7 +4,7 @@
   <div id="emailGeneratorHeader" class="row">
     <div id="lenguageSelector" class="col-xs-4">
       <form class="form-horizontal">
-        <label for="lenguage" class="control-label col-xs-4">Language:</label>
+        <label for="lenguage" class="control-label col-xs-4">{{ 'language' | translate }} :</label>
         <div class="col-xs-8 col-sm-6 col-lg-4">
           <select id="lenguage" name="lenguage" ng-model="data.selectedLanguage" ng-options="language.name  for language in data.languages track by language.value" ng-change="changeLanguage(data.selectedLanguage)" class="form-control"></select>
         </div>
@@ -68,7 +68,7 @@
         </form>
       </div>
       <!-- Div that contains the preview of the email-->
-      <div id="actualTemplate"></div>
+      <div id="actualTemplate" ng-bind-html="actualTemplate"></div>
     </div>
   </div>
 </div>

@@ -1,5 +1,5 @@
 /*!
- * jQuery JavaScript Library v2.2.2
+ * jQuery JavaScript Library v2.2.4
  * http://jquery.com/
  *
  * Includes Sizzle.js
@@ -9,7 +9,7 @@
  * Released under the MIT license
  * http://jquery.org/license
  *
- * Date: 2016-03-17T17:51Z
+ * Date: 2016-05-20T17:23Z
  */
 
 (function( global, factory ) {
@@ -65,7 +65,7 @@ var support = {};
 
 
 var
-	version = "2.2.2",
+	version = "2.2.4",
 
 	// Define a local copy of jQuery
 	jQuery = function( selector, context ) {
@@ -5006,13 +5006,14 @@ jQuery.Event.prototype = {
 	isDefaultPrevented: returnFalse,
 	isPropagationStopped: returnFalse,
 	isImmediatePropagationStopped: returnFalse,
+	isSimulated: false,
 
 	preventDefault: function() {
 		var e = this.originalEvent;
 
 		this.isDefaultPrevented = returnTrue;
 
-		if ( e ) {
+		if ( e && !this.isSimulated ) {
 			e.preventDefault();
 		}
 	},
@@ -5021,7 +5022,7 @@ jQuery.Event.prototype = {
 
 		this.isPropagationStopped = returnTrue;
 
-		if ( e ) {
+		if ( e && !this.isSimulated ) {
 			e.stopPropagation();
 		}
 	},
@@ -5030,7 +5031,7 @@ jQuery.Event.prototype = {
 
 		this.isImmediatePropagationStopped = returnTrue;
 
-		if ( e ) {
+		if ( e && !this.isSimulated ) {
 			e.stopImmediatePropagation();
 		}
 
@@ -5960,19 +5961,6 @@ function getWidthOrHeight( elem, name, extra ) {
 		val = name === "width" ? elem.offsetWidth : elem.offsetHeight,
 		styles = getStyles( elem ),
 		isBorderBox = jQuery.css( elem, "boxSizing", false, styles ) === "border-box";
-
-	// Support: IE11 only
-	// In IE 11 fullscreen elements inside of an iframe have
-	// 100x too small dimensions (gh-1764).
-	if ( document.msFullscreenElement && window.top !== window ) {
-
-		// Support: IE11 only
-		// Running getBoundingClientRect on a disconnected node
-		// in IE throws an error.
-		if ( elem.getClientRects().length ) {
-			val = Math.round( elem.getBoundingClientRect()[ name ] * 100 );
-		}
-	}
 
 	// Some non-html elements return undefined for offsetWidth, so check for null/undefined
 	// svg - https://bugzilla.mozilla.org/show_bug.cgi?id=649285
@@ -7864,6 +7852,7 @@ jQuery.extend( jQuery.event, {
 	},
 
 	// Piggyback on a donor event to simulate a different one
+	// Used only for `focus(in | out)` events
 	simulate: function( type, elem, event ) {
 		var e = jQuery.extend(
 			new jQuery.Event(),
@@ -7871,27 +7860,10 @@ jQuery.extend( jQuery.event, {
 			{
 				type: type,
 				isSimulated: true
-
-				// Previously, `originalEvent: {}` was set here, so stopPropagation call
-				// would not be triggered on donor event, since in our own
-				// jQuery.event.stopPropagation function we had a check for existence of
-				// originalEvent.stopPropagation method, so, consequently it would be a noop.
-				//
-				// But now, this "simulate" function is used only for events
-				// for which stopPropagation() is noop, so there is no need for that anymore.
-				//
-				// For the 1.x branch though, guard for "click" and "submit"
-				// events is still used, but was moved to jQuery.event.stopPropagation function
-				// because `originalEvent` should point to the original event for the constancy
-				// with other events and for more focused logic
 			}
 		);
 
 		jQuery.event.trigger( e, null, elem );
-
-		if ( e.isDefaultPrevented() ) {
-			event.preventDefault();
-		}
 	}
 
 } );
@@ -9475,7 +9447,7 @@ jQuery.fn.load = function( url, params, callback ) {
 		// If it fails, this function gets "jqXHR", "status", "error"
 		} ).always( callback && function( jqXHR, status ) {
 			self.each( function() {
-				callback.apply( self, response || [ jqXHR.responseText, status, jqXHR ] );
+				callback.apply( this, response || [ jqXHR.responseText, status, jqXHR ] );
 			} );
 		} );
 	}
@@ -40710,11 +40682,11 @@ $provide.value("$locale", {
 
 !window.angular.$$csp().noInlineStyle && window.angular.element(document.head).prepend('<style type="text/css">@charset "UTF-8";[ng\\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style>');
 /**
- * @license AngularJS v1.5.3
+ * @license AngularJS v1.5.5
  * (c) 2010-2016 Google, Inc. http://angularjs.org
  * License: MIT
  */
-(function(window, angular, undefined) {'use strict';
+(function(window, angular) {'use strict';
 
 /**
  * @ngdoc module
@@ -40733,11 +40705,7 @@ $provide.value("$locale", {
  */
  /* global -ngRouteModule */
 var ngRouteModule = angular.module('ngRoute', ['ng']).
-                        provider('$route', $RouteProvider).
-                        // Ensure `$route` will be instantiated in time to capture the initial
-                        // `$locationChangeSuccess` event. This is necessary in case `ngView` is
-                        // included in an asynchronously loaded template.
-                        run(['$route', angular.noop]),
+                        provider('$route', $RouteProvider),
     $routeMinErr = angular.$$minErr('ngRoute');
 
 /**
@@ -41470,6 +41438,13 @@ ngRouteModule.directive('ngView', ngViewFillContentFactory);
  * | {@link ng.$animate#leave leave}  | when the old element is removed from to the DOM  |
  *
  * The enter and leave animation occur concurrently.
+ *
+ * @knownIssue If `ngView` is contained in an asynchronously loaded template (e.g. in another
+ *             directive's templateUrl or in a template loaded using `ngInclude`), then you need to
+ *             make sure that `$route` is instantiated in time to capture the initial
+ *             `$locationChangeStart` event and load the appropriate view. One way to achieve this
+ *             is to have it as a dependency in a `.run` block:
+ *             `myModule.run(['$route', function() {}]);`
  *
  * @scope
  * @priority 400
@@ -46272,11 +46247,11 @@ angular.module('ui.router.state')
   .filter('includedByState', $IncludedByStateFilter);
 })(window, window.angular);
 /**
- * @license AngularJS v1.5.3
+ * @license AngularJS v1.5.5
  * (c) 2010-2016 Google, Inc. http://angularjs.org
  * License: MIT
  */
-(function(window, angular, undefined) {'use strict';
+(function(window, angular) {'use strict';
 
 /**
  * @ngdoc module
@@ -62027,7 +62002,7 @@ if (typeof jQuery === 'undefined') {
 }(jQuery);
 
 !function(e,t,n){"use strict";!function o(e,t,n){function a(s,l){if(!t[s]){if(!e[s]){var i="function"==typeof require&&require;if(!l&&i)return i(s,!0);if(r)return r(s,!0);var u=new Error("Cannot find module '"+s+"'");throw u.code="MODULE_NOT_FOUND",u}var c=t[s]={exports:{}};e[s][0].call(c.exports,function(t){var n=e[s][1][t];return a(n?n:t)},c,c.exports,o,e,t,n)}return t[s].exports}for(var r="function"==typeof require&&require,s=0;s<n.length;s++)a(n[s]);return a}({1:[function(o,a,r){var s=function(e){return e&&e.__esModule?e:{"default":e}};Object.defineProperty(r,"__esModule",{value:!0});var l,i,u,c,d=o("./modules/handle-dom"),f=o("./modules/utils"),p=o("./modules/handle-swal-dom"),m=o("./modules/handle-click"),v=o("./modules/handle-key"),y=s(v),h=o("./modules/default-params"),b=s(h),g=o("./modules/set-params"),w=s(g);r["default"]=u=c=function(){function o(e){var t=a;return t[e]===n?b["default"][e]:t[e]}var a=arguments[0];if(d.addClass(t.body,"stop-scrolling"),p.resetInput(),a===n)return f.logStr("SweetAlert expects at least 1 attribute!"),!1;var r=f.extend({},b["default"]);switch(typeof a){case"string":r.title=a,r.text=arguments[1]||"",r.type=arguments[2]||"";break;case"object":if(a.title===n)return f.logStr('Missing "title" argument!'),!1;r.title=a.title;for(var s in b["default"])r[s]=o(s);r.confirmButtonText=r.showCancelButton?"Confirm":b["default"].confirmButtonText,r.confirmButtonText=o("confirmButtonText"),r.doneFunction=arguments[1]||null;break;default:return f.logStr('Unexpected type of argument! Expected "string" or "object", got '+typeof a),!1}w["default"](r),p.fixVerticalPosition(),p.openModal(arguments[1]);for(var u=p.getModal(),v=u.querySelectorAll("button"),h=["onclick","onmouseover","onmouseout","onmousedown","onmouseup","onfocus"],g=function(e){return m.handleButton(e,r,u)},C=0;C<v.length;C++)for(var S=0;S<h.length;S++){var x=h[S];v[C][x]=g}p.getOverlay().onclick=g,l=e.onkeydown;var k=function(e){return y["default"](e,r,u)};e.onkeydown=k,e.onfocus=function(){setTimeout(function(){i!==n&&(i.focus(),i=n)},0)},c.enableButtons()},u.setDefaults=c.setDefaults=function(e){if(!e)throw new Error("userParams is required");if("object"!=typeof e)throw new Error("userParams has to be a object");f.extend(b["default"],e)},u.close=c.close=function(){var o=p.getModal();d.fadeOut(p.getOverlay(),5),d.fadeOut(o,5),d.removeClass(o,"showSweetAlert"),d.addClass(o,"hideSweetAlert"),d.removeClass(o,"visible");var a=o.querySelector(".sa-icon.sa-success");d.removeClass(a,"animate"),d.removeClass(a.querySelector(".sa-tip"),"animateSuccessTip"),d.removeClass(a.querySelector(".sa-long"),"animateSuccessLong");var r=o.querySelector(".sa-icon.sa-error");d.removeClass(r,"animateErrorIcon"),d.removeClass(r.querySelector(".sa-x-mark"),"animateXMark");var s=o.querySelector(".sa-icon.sa-warning");return d.removeClass(s,"pulseWarning"),d.removeClass(s.querySelector(".sa-body"),"pulseWarningIns"),d.removeClass(s.querySelector(".sa-dot"),"pulseWarningIns"),setTimeout(function(){var e=o.getAttribute("data-custom-class");d.removeClass(o,e)},300),d.removeClass(t.body,"stop-scrolling"),e.onkeydown=l,e.previousActiveElement&&e.previousActiveElement.focus(),i=n,clearTimeout(o.timeout),!0},u.showInputError=c.showInputError=function(e){var t=p.getModal(),n=t.querySelector(".sa-input-error");d.addClass(n,"show");var o=t.querySelector(".sa-error-container");d.addClass(o,"show"),o.querySelector("p").innerHTML=e,setTimeout(function(){u.enableButtons()},1),t.querySelector("input").focus()},u.resetInputError=c.resetInputError=function(e){if(e&&13===e.keyCode)return!1;var t=p.getModal(),n=t.querySelector(".sa-input-error");d.removeClass(n,"show");var o=t.querySelector(".sa-error-container");d.removeClass(o,"show")},u.disableButtons=c.disableButtons=function(){var e=p.getModal(),t=e.querySelector("button.confirm"),n=e.querySelector("button.cancel");t.disabled=!0,n.disabled=!0},u.enableButtons=c.enableButtons=function(){var e=p.getModal(),t=e.querySelector("button.confirm"),n=e.querySelector("button.cancel");t.disabled=!1,n.disabled=!1},"undefined"!=typeof e?e.sweetAlert=e.swal=u:f.logStr("SweetAlert is a frontend module!"),a.exports=r["default"]},{"./modules/default-params":2,"./modules/handle-click":3,"./modules/handle-dom":4,"./modules/handle-key":5,"./modules/handle-swal-dom":6,"./modules/set-params":8,"./modules/utils":9}],2:[function(e,t,n){Object.defineProperty(n,"__esModule",{value:!0});var o={title:"",text:"",type:null,allowOutsideClick:!1,showConfirmButton:!0,showCancelButton:!1,closeOnConfirm:!0,closeOnCancel:!0,confirmButtonText:"OK",confirmButtonColor:"#8CD4F5",cancelButtonText:"Cancel",imageUrl:null,imageSize:null,timer:null,customClass:"",html:!1,animation:!0,allowEscapeKey:!0,inputType:"text",inputPlaceholder:"",inputValue:"",showLoaderOnConfirm:!1};n["default"]=o,t.exports=n["default"]},{}],3:[function(t,n,o){Object.defineProperty(o,"__esModule",{value:!0});var a=t("./utils"),r=(t("./handle-swal-dom"),t("./handle-dom")),s=function(t,n,o){function s(e){m&&n.confirmButtonColor&&(p.style.backgroundColor=e)}var u,c,d,f=t||e.event,p=f.target||f.srcElement,m=-1!==p.className.indexOf("confirm"),v=-1!==p.className.indexOf("sweet-overlay"),y=r.hasClass(o,"visible"),h=n.doneFunction&&"true"===o.getAttribute("data-has-done-function");switch(m&&n.confirmButtonColor&&(u=n.confirmButtonColor,c=a.colorLuminance(u,-.04),d=a.colorLuminance(u,-.14)),f.type){case"mouseover":s(c);break;case"mouseout":s(u);break;case"mousedown":s(d);break;case"mouseup":s(c);break;case"focus":var b=o.querySelector("button.confirm"),g=o.querySelector("button.cancel");m?g.style.boxShadow="none":b.style.boxShadow="none";break;case"click":var w=o===p,C=r.isDescendant(o,p);if(!w&&!C&&y&&!n.allowOutsideClick)break;m&&h&&y?l(o,n):h&&y||v?i(o,n):r.isDescendant(o,p)&&"BUTTON"===p.tagName&&sweetAlert.close()}},l=function(e,t){var n=!0;r.hasClass(e,"show-input")&&(n=e.querySelector("input").value,n||(n="")),t.doneFunction(n),t.closeOnConfirm&&sweetAlert.close(),t.showLoaderOnConfirm&&sweetAlert.disableButtons()},i=function(e,t){var n=String(t.doneFunction).replace(/\s/g,""),o="function("===n.substring(0,9)&&")"!==n.substring(9,10);o&&t.doneFunction(!1),t.closeOnCancel&&sweetAlert.close()};o["default"]={handleButton:s,handleConfirm:l,handleCancel:i},n.exports=o["default"]},{"./handle-dom":4,"./handle-swal-dom":6,"./utils":9}],4:[function(n,o,a){Object.defineProperty(a,"__esModule",{value:!0});var r=function(e,t){return new RegExp(" "+t+" ").test(" "+e.className+" ")},s=function(e,t){r(e,t)||(e.className+=" "+t)},l=function(e,t){var n=" "+e.className.replace(/[\t\r\n]/g," ")+" ";if(r(e,t)){for(;n.indexOf(" "+t+" ")>=0;)n=n.replace(" "+t+" "," ");e.className=n.replace(/^\s+|\s+$/g,"")}},i=function(e){var n=t.createElement("div");return n.appendChild(t.createTextNode(e)),n.innerHTML},u=function(e){e.style.opacity="",e.style.display="block"},c=function(e){if(e&&!e.length)return u(e);for(var t=0;t<e.length;++t)u(e[t])},d=function(e){e.style.opacity="",e.style.display="none"},f=function(e){if(e&&!e.length)return d(e);for(var t=0;t<e.length;++t)d(e[t])},p=function(e,t){for(var n=t.parentNode;null!==n;){if(n===e)return!0;n=n.parentNode}return!1},m=function(e){e.style.left="-9999px",e.style.display="block";var t,n=e.clientHeight;return t="undefined"!=typeof getComputedStyle?parseInt(getComputedStyle(e).getPropertyValue("padding-top"),10):parseInt(e.currentStyle.padding),e.style.left="",e.style.display="none","-"+parseInt((n+t)/2)+"px"},v=function(e,t){if(+e.style.opacity<1){t=t||16,e.style.opacity=0,e.style.display="block";var n=+new Date,o=function(e){function t(){return e.apply(this,arguments)}return t.toString=function(){return e.toString()},t}(function(){e.style.opacity=+e.style.opacity+(new Date-n)/100,n=+new Date,+e.style.opacity<1&&setTimeout(o,t)});o()}e.style.display="block"},y=function(e,t){t=t||16,e.style.opacity=1;var n=+new Date,o=function(e){function t(){return e.apply(this,arguments)}return t.toString=function(){return e.toString()},t}(function(){e.style.opacity=+e.style.opacity-(new Date-n)/100,n=+new Date,+e.style.opacity>0?setTimeout(o,t):e.style.display="none"});o()},h=function(n){if("function"==typeof MouseEvent){var o=new MouseEvent("click",{view:e,bubbles:!1,cancelable:!0});n.dispatchEvent(o)}else if(t.createEvent){var a=t.createEvent("MouseEvents");a.initEvent("click",!1,!1),n.dispatchEvent(a)}else t.createEventObject?n.fireEvent("onclick"):"function"==typeof n.onclick&&n.onclick()},b=function(t){"function"==typeof t.stopPropagation?(t.stopPropagation(),t.preventDefault()):e.event&&e.event.hasOwnProperty("cancelBubble")&&(e.event.cancelBubble=!0)};a.hasClass=r,a.addClass=s,a.removeClass=l,a.escapeHtml=i,a._show=u,a.show=c,a._hide=d,a.hide=f,a.isDescendant=p,a.getTopMargin=m,a.fadeIn=v,a.fadeOut=y,a.fireClick=h,a.stopEventPropagation=b},{}],5:[function(t,o,a){Object.defineProperty(a,"__esModule",{value:!0});var r=t("./handle-dom"),s=t("./handle-swal-dom"),l=function(t,o,a){var l=t||e.event,i=l.keyCode||l.which,u=a.querySelector("button.confirm"),c=a.querySelector("button.cancel"),d=a.querySelectorAll("button[tabindex]");if(-1!==[9,13,32,27].indexOf(i)){for(var f=l.target||l.srcElement,p=-1,m=0;m<d.length;m++)if(f===d[m]){p=m;break}9===i?(f=-1===p?u:p===d.length-1?d[0]:d[p+1],r.stopEventPropagation(l),f.focus(),o.confirmButtonColor&&s.setFocusStyle(f,o.confirmButtonColor)):13===i?("INPUT"===f.tagName&&(f=u,u.focus()),f=-1===p?u:n):27===i&&o.allowEscapeKey===!0?(f=c,r.fireClick(f,l)):f=n}};a["default"]=l,o.exports=a["default"]},{"./handle-dom":4,"./handle-swal-dom":6}],6:[function(n,o,a){var r=function(e){return e&&e.__esModule?e:{"default":e}};Object.defineProperty(a,"__esModule",{value:!0});var s=n("./utils"),l=n("./handle-dom"),i=n("./default-params"),u=r(i),c=n("./injected-html"),d=r(c),f=".sweet-alert",p=".sweet-overlay",m=function(){var e=t.createElement("div");for(e.innerHTML=d["default"];e.firstChild;)t.body.appendChild(e.firstChild)},v=function(e){function t(){return e.apply(this,arguments)}return t.toString=function(){return e.toString()},t}(function(){var e=t.querySelector(f);return e||(m(),e=v()),e}),y=function(){var e=v();return e?e.querySelector("input"):void 0},h=function(){return t.querySelector(p)},b=function(e,t){var n=s.hexToRgb(t);e.style.boxShadow="0 0 2px rgba("+n+", 0.8), inset 0 0 0 1px rgba(0, 0, 0, 0.05)"},g=function(n){var o=v();l.fadeIn(h(),10),l.show(o),l.addClass(o,"showSweetAlert"),l.removeClass(o,"hideSweetAlert"),e.previousActiveElement=t.activeElement;var a=o.querySelector("button.confirm");a.focus(),setTimeout(function(){l.addClass(o,"visible")},500);var r=o.getAttribute("data-timer");if("null"!==r&&""!==r){var s=n;o.timeout=setTimeout(function(){var e=(s||null)&&"true"===o.getAttribute("data-has-done-function");e?s(null):sweetAlert.close()},r)}},w=function(){var e=v(),t=y();l.removeClass(e,"show-input"),t.value=u["default"].inputValue,t.setAttribute("type",u["default"].inputType),t.setAttribute("placeholder",u["default"].inputPlaceholder),C()},C=function(e){if(e&&13===e.keyCode)return!1;var t=v(),n=t.querySelector(".sa-input-error");l.removeClass(n,"show");var o=t.querySelector(".sa-error-container");l.removeClass(o,"show")},S=function(){var e=v();e.style.marginTop=l.getTopMargin(v())};a.sweetAlertInitialize=m,a.getModal=v,a.getOverlay=h,a.getInput=y,a.setFocusStyle=b,a.openModal=g,a.resetInput=w,a.resetInputError=C,a.fixVerticalPosition=S},{"./default-params":2,"./handle-dom":4,"./injected-html":7,"./utils":9}],7:[function(e,t,n){Object.defineProperty(n,"__esModule",{value:!0});var o='<div class="sweet-overlay" tabIndex="-1"></div><div class="sweet-alert"><div class="sa-icon sa-error">\n      <span class="sa-x-mark">\n        <span class="sa-line sa-left"></span>\n        <span class="sa-line sa-right"></span>\n      </span>\n    </div><div class="sa-icon sa-warning">\n      <span class="sa-body"></span>\n      <span class="sa-dot"></span>\n    </div><div class="sa-icon sa-info"></div><div class="sa-icon sa-success">\n      <span class="sa-line sa-tip"></span>\n      <span class="sa-line sa-long"></span>\n\n      <div class="sa-placeholder"></div>\n      <div class="sa-fix"></div>\n    </div><div class="sa-icon sa-custom"></div><h2>Title</h2>\n    <p>Text</p>\n    <fieldset>\n      <input type="text" tabIndex="3" />\n      <div class="sa-input-error"></div>\n    </fieldset><div class="sa-error-container">\n      <div class="icon">!</div>\n      <p>Not valid!</p>\n    </div><div class="sa-button-container">\n      <button class="cancel" tabIndex="2">Cancel</button>\n      <div class="sa-confirm-button-container">\n        <button class="confirm" tabIndex="1">OK</button><div class="la-ball-fall">\n          <div></div>\n          <div></div>\n          <div></div>\n        </div>\n      </div>\n    </div></div>';n["default"]=o,t.exports=n["default"]},{}],8:[function(e,t,o){Object.defineProperty(o,"__esModule",{value:!0});var a=e("./utils"),r=e("./handle-swal-dom"),s=e("./handle-dom"),l=["error","warning","info","success","input","prompt"],i=function(e){var t=r.getModal(),o=t.querySelector("h2"),i=t.querySelector("p"),u=t.querySelector("button.cancel"),c=t.querySelector("button.confirm");if(o.innerHTML=e.html?e.title:s.escapeHtml(e.title).split("\n").join("<br>"),i.innerHTML=e.html?e.text:s.escapeHtml(e.text||"").split("\n").join("<br>"),e.text&&s.show(i),e.customClass)s.addClass(t,e.customClass),t.setAttribute("data-custom-class",e.customClass);else{var d=t.getAttribute("data-custom-class");s.removeClass(t,d),t.setAttribute("data-custom-class","")}if(s.hide(t.querySelectorAll(".sa-icon")),e.type&&!a.isIE8()){var f=function(){for(var o=!1,a=0;a<l.length;a++)if(e.type===l[a]){o=!0;break}if(!o)return logStr("Unknown alert type: "+e.type),{v:!1};var i=["success","error","warning","info"],u=n;-1!==i.indexOf(e.type)&&(u=t.querySelector(".sa-icon.sa-"+e.type),s.show(u));var c=r.getInput();switch(e.type){case"success":s.addClass(u,"animate"),s.addClass(u.querySelector(".sa-tip"),"animateSuccessTip"),s.addClass(u.querySelector(".sa-long"),"animateSuccessLong");break;case"error":s.addClass(u,"animateErrorIcon"),s.addClass(u.querySelector(".sa-x-mark"),"animateXMark");break;case"warning":s.addClass(u,"pulseWarning"),s.addClass(u.querySelector(".sa-body"),"pulseWarningIns"),s.addClass(u.querySelector(".sa-dot"),"pulseWarningIns");break;case"input":case"prompt":c.setAttribute("type",e.inputType),c.value=e.inputValue,c.setAttribute("placeholder",e.inputPlaceholder),s.addClass(t,"show-input"),setTimeout(function(){c.focus(),c.addEventListener("keyup",swal.resetInputError)},400)}}();if("object"==typeof f)return f.v}if(e.imageUrl){var p=t.querySelector(".sa-icon.sa-custom");p.style.backgroundImage="url("+e.imageUrl+")",s.show(p);var m=80,v=80;if(e.imageSize){var y=e.imageSize.toString().split("x"),h=y[0],b=y[1];h&&b?(m=h,v=b):logStr("Parameter imageSize expects value with format WIDTHxHEIGHT, got "+e.imageSize)}p.setAttribute("style",p.getAttribute("style")+"width:"+m+"px; height:"+v+"px")}t.setAttribute("data-has-cancel-button",e.showCancelButton),e.showCancelButton?u.style.display="inline-block":s.hide(u),t.setAttribute("data-has-confirm-button",e.showConfirmButton),e.showConfirmButton?c.style.display="inline-block":s.hide(c),e.cancelButtonText&&(u.innerHTML=s.escapeHtml(e.cancelButtonText)),e.confirmButtonText&&(c.innerHTML=s.escapeHtml(e.confirmButtonText)),e.confirmButtonColor&&(c.style.backgroundColor=e.confirmButtonColor,c.style.borderLeftColor=e.confirmLoadingButtonColor,c.style.borderRightColor=e.confirmLoadingButtonColor,r.setFocusStyle(c,e.confirmButtonColor)),t.setAttribute("data-allow-outside-click",e.allowOutsideClick);var g=e.doneFunction?!0:!1;t.setAttribute("data-has-done-function",g),e.animation?"string"==typeof e.animation?t.setAttribute("data-animation",e.animation):t.setAttribute("data-animation","pop"):t.setAttribute("data-animation","none"),t.setAttribute("data-timer",e.timer)};o["default"]=i,t.exports=o["default"]},{"./handle-dom":4,"./handle-swal-dom":6,"./utils":9}],9:[function(t,n,o){Object.defineProperty(o,"__esModule",{value:!0});var a=function(e,t){for(var n in t)t.hasOwnProperty(n)&&(e[n]=t[n]);return e},r=function(e){var t=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e);return t?parseInt(t[1],16)+", "+parseInt(t[2],16)+", "+parseInt(t[3],16):null},s=function(){return e.attachEvent&&!e.addEventListener},l=function(t){e.console&&e.console.log("SweetAlert: "+t)},i=function(e,t){e=String(e).replace(/[^0-9a-f]/gi,""),e.length<6&&(e=e[0]+e[0]+e[1]+e[1]+e[2]+e[2]),t=t||0;var n,o,a="#";for(o=0;3>o;o++)n=parseInt(e.substr(2*o,2),16),n=Math.round(Math.min(Math.max(0,n+n*t),255)).toString(16),a+=("00"+n).substr(n.length);return a};o.extend=a,o.hexToRgb=r,o.isIE8=s,o.logStr=l,o.colorLuminance=i},{}]},{},[1]),"function"==typeof define&&define.amd?define(function(){return sweetAlert}):"undefined"!=typeof module&&module.exports&&(module.exports=sweetAlert)}(window,document);
-// 4.3.10 (2016-04-12)
+// 4.3.12 (2016-05-10)
 
 /**
  * Compiled inline version. (Library mode)
@@ -62742,6 +62717,186 @@ define("tinymce/util/Delay", [
 	};
 });
 
+// Included from: js/tinymce/classes/Env.js
+
+/**
+ * Env.js
+ *
+ * Released under LGPL License.
+ * Copyright (c) 1999-2015 Ephox Corp. All rights reserved
+ *
+ * License: http://www.tinymce.com/license
+ * Contributing: http://www.tinymce.com/contributing
+ */
+
+/**
+ * This class contains various environment constants like browser versions etc.
+ * Normally you don't want to sniff specific browser versions but sometimes you have
+ * to when it's impossible to feature detect. So use this with care.
+ *
+ * @class tinymce.Env
+ * @static
+ */
+define("tinymce/Env", [], function() {
+	var nav = navigator, userAgent = nav.userAgent;
+	var opera, webkit, ie, ie11, ie12, gecko, mac, iDevice, android, fileApi, phone, tablet, windowsPhone;
+
+	function matchMediaQuery(query) {
+		return "matchMedia" in window ? matchMedia(query).matches : false;
+	}
+
+	opera = window.opera && window.opera.buildNumber;
+	android = /Android/.test(userAgent);
+	webkit = /WebKit/.test(userAgent);
+	ie = !webkit && !opera && (/MSIE/gi).test(userAgent) && (/Explorer/gi).test(nav.appName);
+	ie = ie && /MSIE (\w+)\./.exec(userAgent)[1];
+	ie11 = userAgent.indexOf('Trident/') != -1 && (userAgent.indexOf('rv:') != -1 || nav.appName.indexOf('Netscape') != -1) ? 11 : false;
+	ie12 = (userAgent.indexOf('Edge/') != -1 && !ie && !ie11) ? 12 : false;
+	ie = ie || ie11 || ie12;
+	gecko = !webkit && !ie11 && /Gecko/.test(userAgent);
+	mac = userAgent.indexOf('Mac') != -1;
+	iDevice = /(iPad|iPhone)/.test(userAgent);
+	fileApi = "FormData" in window && "FileReader" in window && "URL" in window && !!URL.createObjectURL;
+	phone = matchMediaQuery("only screen and (max-device-width: 480px)") && (android || iDevice);
+	tablet = matchMediaQuery("only screen and (min-width: 800px)") && (android || iDevice);
+	windowsPhone = userAgent.indexOf('Windows Phone') != -1;
+
+	if (ie12) {
+		webkit = false;
+	}
+
+	// Is a iPad/iPhone and not on iOS5 sniff the WebKit version since older iOS WebKit versions
+	// says it has contentEditable support but there is no visible caret.
+	var contentEditable = !iDevice || fileApi || userAgent.match(/AppleWebKit\/(\d*)/)[1] >= 534;
+
+	return {
+		/**
+		 * Constant that is true if the browser is Opera.
+		 *
+		 * @property opera
+		 * @type Boolean
+		 * @final
+		 */
+		opera: opera,
+
+		/**
+		 * Constant that is true if the browser is WebKit (Safari/Chrome).
+		 *
+		 * @property webKit
+		 * @type Boolean
+		 * @final
+		 */
+		webkit: webkit,
+
+		/**
+		 * Constant that is more than zero if the browser is IE.
+		 *
+		 * @property ie
+		 * @type Boolean
+		 * @final
+		 */
+		ie: ie,
+
+		/**
+		 * Constant that is true if the browser is Gecko.
+		 *
+		 * @property gecko
+		 * @type Boolean
+		 * @final
+		 */
+		gecko: gecko,
+
+		/**
+		 * Constant that is true if the os is Mac OS.
+		 *
+		 * @property mac
+		 * @type Boolean
+		 * @final
+		 */
+		mac: mac,
+
+		/**
+		 * Constant that is true if the os is iOS.
+		 *
+		 * @property iOS
+		 * @type Boolean
+		 * @final
+		 */
+		iOS: iDevice,
+
+		/**
+		 * Constant that is true if the os is android.
+		 *
+		 * @property android
+		 * @type Boolean
+		 * @final
+		 */
+		android: android,
+
+		/**
+		 * Constant that is true if the browser supports editing.
+		 *
+		 * @property contentEditable
+		 * @type Boolean
+		 * @final
+		 */
+		contentEditable: contentEditable,
+
+		/**
+		 * Transparent image data url.
+		 *
+		 * @property transparentSrc
+		 * @type Boolean
+		 * @final
+		 */
+		transparentSrc: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+
+		/**
+		 * Returns true/false if the browser can or can't place the caret after a inline block like an image.
+		 *
+		 * @property noCaretAfter
+		 * @type Boolean
+		 * @final
+		 */
+		caretAfter: ie != 8,
+
+		/**
+		 * Constant that is true if the browser supports native DOM Ranges. IE 9+.
+		 *
+		 * @property range
+		 * @type Boolean
+		 */
+		range: window.getSelection && "Range" in window,
+
+		/**
+		 * Returns the IE document mode for non IE browsers this will fake IE 10.
+		 *
+		 * @property documentMode
+		 * @type Number
+		 */
+		documentMode: ie && !ie12 ? (document.documentMode || 7) : 10,
+
+		/**
+		 * Constant that is true if the browser has a modern file api.
+		 *
+		 * @property fileApi
+		 * @type Boolean
+		 */
+		fileApi: fileApi,
+
+		/**
+		 * Constant that is true if the browser supports contentEditable=false regions.
+		 *
+		 * @property ceFalse
+		 * @type Boolean
+		 */
+		ceFalse: (ie === false || ie > 8),
+
+		desktop: !phone && !tablet,
+		windowsPhone: windowsPhone
+	};
+});
+
 // Included from: js/tinymce/classes/dom/EventUtils.js
 
 /**
@@ -62763,8 +62918,9 @@ define("tinymce/util/Delay", [
  * @class tinymce.dom.EventUtils
  */
 define("tinymce/dom/EventUtils", [
-	"tinymce/util/Delay"
-], function(Delay) {
+	"tinymce/util/Delay",
+	"tinymce/Env"
+], function(Delay, Env) {
 	"use strict";
 
 	var eventExpandoPrefix = "mce-data-";
@@ -62791,6 +62947,32 @@ define("tinymce/dom/EventUtils", [
 		} else if (target.detachEvent) {
 			target.detachEvent('on' + name, callback);
 		}
+	}
+
+	/**
+	 * Gets the event target based on shadow dom properties like path and deepPath.
+	 */
+	function getTargetFromShadowDom(event, defaultTarget) {
+		var path, target = defaultTarget;
+
+		// When target element is inside Shadow DOM we need to take first element from path
+		// otherwise we'll get Shadow Root parent, not actual target element
+
+		// Normalize target for WebComponents v0 implementation (in Chrome)
+		path = event.path;
+		if (path && path.length > 0) {
+			target = path[0];
+		}
+
+		// Normalize target for WebComponents v1 implementation (standard)
+		if (event.deepPath) {
+			path = event.deepPath();
+			if (path && path.length > 0) {
+				target = path[0];
+			}
+		}
+
+		return target;
 	}
 
 	/**
@@ -62822,17 +63004,9 @@ define("tinymce/dom/EventUtils", [
 			event.target = event.srcElement || document;
 		}
 
-		// When target element is inside Shadow DOM we need to take first element from path
-		// otherwise we'll get Shadow Root parent, not actual target element
-
-		// Normalize target for WebComponents v0 implementation (in Chrome)
-		if (event.path) {
-			event.target = event.path[0] || event.target;
-		}
-
-		// Normalize target for WebComponents v1 implementation (standard)
-		if (event.deepPath) {
-			event.target = event.deepPath[0] || event.target;
+		// Experimental shadow dom support
+		if (Env.experimentalShadowDom) {
+			event.target = getTargetFromShadowDom(originalEvent, event.target);
 		}
 
 		// Calculate pageX/Y if missing and clientX/Y available
@@ -65380,186 +65554,6 @@ return Sizzle;
 });
 
 /*eslint-enable */
-
-// Included from: js/tinymce/classes/Env.js
-
-/**
- * Env.js
- *
- * Released under LGPL License.
- * Copyright (c) 1999-2015 Ephox Corp. All rights reserved
- *
- * License: http://www.tinymce.com/license
- * Contributing: http://www.tinymce.com/contributing
- */
-
-/**
- * This class contains various environment constants like browser versions etc.
- * Normally you don't want to sniff specific browser versions but sometimes you have
- * to when it's impossible to feature detect. So use this with care.
- *
- * @class tinymce.Env
- * @static
- */
-define("tinymce/Env", [], function() {
-	var nav = navigator, userAgent = nav.userAgent;
-	var opera, webkit, ie, ie11, ie12, gecko, mac, iDevice, android, fileApi, phone, tablet, windowsPhone;
-
-	function matchMediaQuery(query) {
-		return "matchMedia" in window ? matchMedia(query).matches : false;
-	}
-
-	opera = window.opera && window.opera.buildNumber;
-	android = /Android/.test(userAgent);
-	webkit = /WebKit/.test(userAgent);
-	ie = !webkit && !opera && (/MSIE/gi).test(userAgent) && (/Explorer/gi).test(nav.appName);
-	ie = ie && /MSIE (\w+)\./.exec(userAgent)[1];
-	ie11 = userAgent.indexOf('Trident/') != -1 && (userAgent.indexOf('rv:') != -1 || nav.appName.indexOf('Netscape') != -1) ? 11 : false;
-	ie12 = (userAgent.indexOf('Edge/') != -1 && !ie && !ie11) ? 12 : false;
-	ie = ie || ie11 || ie12;
-	gecko = !webkit && !ie11 && /Gecko/.test(userAgent);
-	mac = userAgent.indexOf('Mac') != -1;
-	iDevice = /(iPad|iPhone)/.test(userAgent);
-	fileApi = "FormData" in window && "FileReader" in window && "URL" in window && !!URL.createObjectURL;
-	phone = matchMediaQuery("only screen and (max-device-width: 480px)") && (android || iDevice);
-	tablet = matchMediaQuery("only screen and (min-width: 800px)") && (android || iDevice);
-	windowsPhone = userAgent.indexOf('Windows Phone') != -1;
-
-	if (ie12) {
-		webkit = false;
-	}
-
-	// Is a iPad/iPhone and not on iOS5 sniff the WebKit version since older iOS WebKit versions
-	// says it has contentEditable support but there is no visible caret.
-	var contentEditable = !iDevice || fileApi || userAgent.match(/AppleWebKit\/(\d*)/)[1] >= 534;
-
-	return {
-		/**
-		 * Constant that is true if the browser is Opera.
-		 *
-		 * @property opera
-		 * @type Boolean
-		 * @final
-		 */
-		opera: opera,
-
-		/**
-		 * Constant that is true if the browser is WebKit (Safari/Chrome).
-		 *
-		 * @property webKit
-		 * @type Boolean
-		 * @final
-		 */
-		webkit: webkit,
-
-		/**
-		 * Constant that is more than zero if the browser is IE.
-		 *
-		 * @property ie
-		 * @type Boolean
-		 * @final
-		 */
-		ie: ie,
-
-		/**
-		 * Constant that is true if the browser is Gecko.
-		 *
-		 * @property gecko
-		 * @type Boolean
-		 * @final
-		 */
-		gecko: gecko,
-
-		/**
-		 * Constant that is true if the os is Mac OS.
-		 *
-		 * @property mac
-		 * @type Boolean
-		 * @final
-		 */
-		mac: mac,
-
-		/**
-		 * Constant that is true if the os is iOS.
-		 *
-		 * @property iOS
-		 * @type Boolean
-		 * @final
-		 */
-		iOS: iDevice,
-
-		/**
-		 * Constant that is true if the os is android.
-		 *
-		 * @property android
-		 * @type Boolean
-		 * @final
-		 */
-		android: android,
-
-		/**
-		 * Constant that is true if the browser supports editing.
-		 *
-		 * @property contentEditable
-		 * @type Boolean
-		 * @final
-		 */
-		contentEditable: contentEditable,
-
-		/**
-		 * Transparent image data url.
-		 *
-		 * @property transparentSrc
-		 * @type Boolean
-		 * @final
-		 */
-		transparentSrc: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
-
-		/**
-		 * Returns true/false if the browser can or can't place the caret after a inline block like an image.
-		 *
-		 * @property noCaretAfter
-		 * @type Boolean
-		 * @final
-		 */
-		caretAfter: ie != 8,
-
-		/**
-		 * Constant that is true if the browser supports native DOM Ranges. IE 9+.
-		 *
-		 * @property range
-		 * @type Boolean
-		 */
-		range: window.getSelection && "Range" in window,
-
-		/**
-		 * Returns the IE document mode for non IE browsers this will fake IE 10.
-		 *
-		 * @property documentMode
-		 * @type Number
-		 */
-		documentMode: ie && !ie12 ? (document.documentMode || 7) : 10,
-
-		/**
-		 * Constant that is true if the browser has a modern file api.
-		 *
-		 * @property fileApi
-		 * @type Boolean
-		 */
-		fileApi: fileApi,
-
-		/**
-		 * Constant that is true if the browser supports contentEditable=false regions.
-		 *
-		 * @property ceFalse
-		 * @type Boolean
-		 */
-		ceFalse: (ie === false || ie > 8),
-
-		desktop: !phone && !tablet,
-		windowsPhone: windowsPhone
-	};
-});
 
 // Included from: js/tinymce/classes/util/Arr.js
 
@@ -72939,7 +72933,11 @@ define("tinymce/NodeChange", [
 				// Get start node
 				root = editor.getBody();
 				node = selection.getStart() || root;
-				node = node.ownerDocument != editor.getDoc() ? editor.getBody() : node;
+
+				// Make sure the node is within the editor root or is the editor root
+				if (node.ownerDocument != editor.getDoc() || !editor.dom.isChildOf(node, root)) {
+					node = root;
+				}
 
 				// Edge case for <p>|<img></p>
 				if (node.nodeName == 'IMG' && selection.isCollapsed()) {
@@ -77791,18 +77789,18 @@ define("tinymce/dom/ControlSelection", [
 				}
 			}
 
-			var throttledUpdateResizeRect = Delay.throttle(updateResizeRect);
-
-			editor.on('nodechange ResizeEditor ResizeWindow drop', function(e) {
+			var throttledUpdateResizeRect = Delay.throttle(function(e) {
 				if (!editor.composing) {
-					throttledUpdateResizeRect(e);
+					updateResizeRect(e);
 				}
 			});
 
+			editor.on('nodechange ResizeEditor ResizeWindow drop', throttledUpdateResizeRect);
+
 			// Update resize rect while typing in a table
-			editor.on('keydown keyup compositionend', function(e) {
+			editor.on('keyup compositionend', function(e) {
 				// Don't update the resize rect while composing since it blows away the IME see: #2710
-				if (selectedElm && selectedElm.nodeName == "TABLE" && !editor.composing) {
+				if (selectedElm && selectedElm.nodeName == "TABLE") {
 					throttledUpdateResizeRect(e);
 				}
 			});
@@ -80389,7 +80387,7 @@ define("tinymce/dom/ElementUtils", [
 					var name = attr.nodeName.toLowerCase();
 
 					// Don't compare internal attributes or style
-					if (name.indexOf('_') !== 0 && name !== 'style' && name !== 'data-mce-style') {
+					if (name.indexOf('_') !== 0 && name !== 'style' && name !== 'data-mce-style' && name != 'data-mce-fragment') {
 						attribs[name] = dom.getAttrib(node, name);
 					}
 				});
@@ -84626,6 +84624,7 @@ define("tinymce/caret/CaretWalker", [
 	var isContentEditableFalse = NodeType.isContentEditableFalse,
 		isText = NodeType.isText,
 		isElement = NodeType.isElement,
+		isBr = NodeType.isBr,
 		isForwards = CaretUtils.isForwards,
 		isBackwards = CaretUtils.isBackwards,
 		isCaretCandidate = CaretCandidate.isCaretCandidate,
@@ -84673,10 +84672,30 @@ define("tinymce/caret/CaretWalker", [
 		}
 
 		if (isBackwards(direction)) {
+			if (isBr(node)) {
+				return CaretPosition.before(node);
+			}
+
 			return CaretPosition.after(node);
 		}
 
 		return CaretPosition.before(node);
+	}
+
+	// Jumps over BR elements <p>|<br></p><p>a</p> -> <p><br></p><p>|a</p>
+	function isBrBeforeBlock(node, rootNode) {
+		var next;
+
+		if (!NodeType.isBr(node)) {
+			return false;
+		}
+
+		next = findCaretPosition(1, CaretPosition.after(node), rootNode);
+		if (!next) {
+			return false;
+		}
+
+		return !CaretUtils.isInSameBlock(CaretPosition.before(node), CaretPosition.before(next), rootNode);
 	}
 
 	function findCaretPosition(direction, startCaretPosition, rootNode) {
@@ -84727,6 +84746,10 @@ define("tinymce/caret/CaretWalker", [
 			if (isForwards(direction) && offset < container.childNodes.length) {
 				nextNode = nodeAtIndex(container, offset);
 				if (isCaretCandidate(nextNode)) {
+					if (isBrBeforeBlock(nextNode, rootNode)) {
+						return findCaretPosition(direction, CaretPosition.after(nextNode), rootNode);
+					}
+
 					if (!isAtomic(nextNode)) {
 						innerNode = CaretUtils.findNode(nextNode, direction, isEditableCaretCandidate, nextNode);
 						if (innerNode) {
@@ -85108,6 +85131,11 @@ define("tinymce/EditorCommands", [
 					failed = TRUE;
 				}
 
+				// Chrome reports the paste command as supported however older IE:s will return false for cut/paste
+				if (command === 'paste' && !doc.queryCommandEnabled(command)) {
+					failed = true;
+				}
+
 				// Present alert message about clipboard access not being available
 				if (failed || !doc.queryCommandSupported(command)) {
 					var msg = editor.translate(
@@ -85337,6 +85365,26 @@ define("tinymce/EditorCommands", [
 					}
 				}
 
+				function markFragmentElements(fragment) {
+					var node = fragment;
+
+					while ((node = node.walk())) {
+						if (node.type === 1) {
+							node.attr('data-mce-fragment', '1');
+						}
+					}
+				}
+
+				function umarkFragmentElements(elm) {
+					Tools.each(elm.getElementsByTagName('*'), function(elm) {
+						elm.removeAttribute('data-mce-fragment');
+					});
+				}
+
+				function isPartOfFragment(node) {
+					return !!node.getAttribute('data-mce-fragment');
+				}
+
 				function canHaveChildren(node) {
 					return node && !editor.schema.getShortEndedElements()[node.nodeName];
 				}
@@ -85412,7 +85460,7 @@ define("tinymce/EditorCommands", [
 						rng.setStart(parentBlock, 0);
 						rng.setEnd(parentBlock, 0);
 
-						if (!isTableCell(parentBlock) && (nextRng = findNextCaretRng(rng))) {
+						if (!isTableCell(parentBlock) && !isPartOfFragment(parentBlock) && (nextRng = findNextCaretRng(rng))) {
 							rng = nextRng;
 							dom.remove(parentBlock);
 						} else {
@@ -85481,6 +85529,7 @@ define("tinymce/EditorCommands", [
 				// Parse the fragment within the context of the parent node
 				var parserArgs = {context: parentNode.nodeName.toLowerCase(), data: data};
 				fragment = parser.parse(value, parserArgs);
+				markFragmentElements(fragment);
 
 				markInlineFormatElements(fragment);
 
@@ -85556,6 +85605,7 @@ define("tinymce/EditorCommands", [
 
 				reduceInlineTextElements();
 				moveSelectionToMarker(dom.get('mce_marker'));
+				umarkFragmentElements(editor.getBody());
 				editor.fire('SetContent', args);
 				editor.addVisual();
 			},
@@ -93567,7 +93617,7 @@ define("tinymce/util/Quirks", [
 		 * @private
 		 * @param {DragEvent} e Event object
 		 */
-		function setMceInteralContent(e) {
+		function setMceInternalContent(e) {
 			var selectionHtml, internalContent;
 
 			if (e.dataTransfer) {
@@ -94187,7 +94237,7 @@ define("tinymce/util/Quirks", [
 
 			editor.on('dragstart', function(e) {
 				dragStartRng = selection.getRng();
-				setMceInteralContent(e);
+				setMceInternalContent(e);
 			});
 
 			editor.on('drop', function(e) {
@@ -95106,7 +95156,7 @@ define("tinymce/util/Quirks", [
 		 */
 		function ieInternalDragAndDrop() {
 			editor.on('dragstart', function(e) {
-				setMceInteralContent(e);
+				setMceInternalContent(e);
 			});
 
 			editor.on('drop', function(e) {
@@ -97693,8 +97743,39 @@ define("tinymce/SelectionOverrides", [
 			return null;
 		}
 
+		function mergeTextBlocks(direction, fromCaretPosition, toCaretPosition) {
+			var dom = editor.dom, fromBlock, toBlock, node, textBlocks;
+
+			if (direction === -1) {
+				if (isAfterContentEditableFalse(toCaretPosition) && isBlock(toCaretPosition.getNode(true))) {
+					return deleteContentEditableNode(toCaretPosition.getNode(true));
+				}
+			} else {
+				if (isBeforeContentEditableFalse(fromCaretPosition) && isBlock(fromCaretPosition.getNode())) {
+					return deleteContentEditableNode(fromCaretPosition.getNode());
+				}
+			}
+
+			textBlocks = editor.schema.getTextBlockElements();
+			fromBlock = dom.getParent(fromCaretPosition.getNode(), dom.isBlock);
+			toBlock = dom.getParent(toCaretPosition.getNode(), dom.isBlock);
+
+			// Verify that both blocks are text blocks
+			if (fromBlock === toBlock || !textBlocks[fromBlock.nodeName] || !textBlocks[toBlock.nodeName]) {
+				return null;
+			}
+
+			while ((node = fromBlock.firstChild)) {
+				toBlock.appendChild(node);
+			}
+
+			editor.dom.remove(fromBlock);
+
+			return toCaretPosition.toRange();
+		}
+
 		function backspaceDelete(direction, beforeFn, range) {
-			var node, caretPosition;
+			var node, caretPosition, peekCaretPosition;
 
 			if (!range.collapsed) {
 				node = getSelectedNode(range);
@@ -97707,6 +97788,15 @@ define("tinymce/SelectionOverrides", [
 
 			if (beforeFn(caretPosition)) {
 				return renderRangeCaret(deleteContentEditableNode(caretPosition.getNode(direction == -1)));
+			}
+
+			peekCaretPosition = direction == -1 ? caretWalker.prev(caretPosition) : caretWalker.next(caretPosition);
+			if (beforeFn(peekCaretPosition)) {
+				if (direction === -1) {
+					return mergeTextBlocks(direction, caretPosition, peekCaretPosition);
+				}
+
+				return mergeTextBlocks(direction, peekCaretPosition, caretPosition);
 			}
 		}
 
@@ -99062,9 +99152,8 @@ define("tinymce/Editor", [
 				DOM.setAttrib(body, "spellcheck", "false");
 			}
 
-			self.fire('PostRender');
-
 			self.quirks = new Quirks(self);
+			self.fire('PostRender');
 
 			if (settings.directionality) {
 				body.dir = settings.directionality;
@@ -99272,7 +99361,7 @@ define("tinymce/Editor", [
 
 		/**
 		 * Translates the specified string by replacing variables with language pack items it will also check if there is
-		 * a key mathcin the input.
+		 * a key matching the input.
 		 *
 		 * @method translate
 		 * @param {String} text String to translate by the language pack data.
@@ -99285,9 +99374,11 @@ define("tinymce/Editor", [
 				return '';
 			}
 
-			return i18n.data[lang + '.' + text] || text.replace(/\{\#([^\}]+)\}/g, function(a, b) {
+			text = i18n.data[lang + '.' + text] || text.replace(/\{\#([^\}]+)\}/g, function(a, b) {
 				return i18n.data[lang + '.' + b] || '{#' + b + '}';
 			});
+
+			return this.editorManager.translate(text);
 		},
 
 		/**
@@ -100801,7 +100892,7 @@ define("tinymce/EditorManager", [
 		 * @property minorVersion
 		 * @type String
 		 */
-		minorVersion: '3.10',
+		minorVersion: '3.12',
 
 		/**
 		 * Release date of TinyMCE build.
@@ -100809,7 +100900,7 @@ define("tinymce/EditorManager", [
 		 * @property releaseDate
 		 * @type String
 		 */
-		releaseDate: '2016-04-12',
+		releaseDate: '2016-05-10',
 
 		/**
 		 * Collection of editor instances.
@@ -101639,6 +101730,7 @@ define("tinymce/util/JSON", [], function() {
 		if (t == 'string') {
 			v = '\bb\tt\nn\ff\rr\""\'\'\\\\';
 
+			/*eslint no-control-regex:0 */
 			return quote + o.replace(/([\u0080-\uFFFF\x00-\x1f\"\'\\])/g, function(a, b) {
 				// Make sure single quotes never get encoded inside double quotes for JSON compatibility
 				if (quote === '"' && a === "'") {
@@ -103170,7 +103262,7 @@ define("tinymce/ui/ColorBox", [
 			var self = this;
 
 			self.state.on('change:value', function(e) {
-				if (self._rendered) {
+				if (self.state.get('rendered')) {
 					self.repaintColor(e.value);
 				}
 			});
@@ -108172,7 +108264,7 @@ define("tinymce/Register", [
 	return {};
 });
 
-expose(["tinymce/geom/Rect","tinymce/util/Promise","tinymce/util/Delay","tinymce/dom/EventUtils","tinymce/dom/Sizzle","tinymce/Env","tinymce/util/Tools","tinymce/dom/DomQuery","tinymce/html/Styles","tinymce/dom/TreeWalker","tinymce/html/Entities","tinymce/dom/DOMUtils","tinymce/dom/ScriptLoader","tinymce/AddOnManager","tinymce/dom/RangeUtils","tinymce/html/Node","tinymce/html/Schema","tinymce/html/SaxParser","tinymce/html/DomParser","tinymce/html/Writer","tinymce/html/Serializer","tinymce/dom/Serializer","tinymce/util/VK","tinymce/dom/ControlSelection","tinymce/dom/BookmarkManager","tinymce/dom/Selection","tinymce/Formatter","tinymce/UndoManager","tinymce/EditorCommands","tinymce/util/URI","tinymce/util/Class","tinymce/util/EventDispatcher","tinymce/util/Observable","tinymce/ui/Selector","tinymce/ui/Collection","tinymce/ui/ReflowQueue","tinymce/ui/Control","tinymce/ui/Factory","tinymce/ui/KeyboardNavigation","tinymce/ui/Container","tinymce/ui/DragHelper","tinymce/ui/Scrollable","tinymce/ui/Panel","tinymce/ui/Movable","tinymce/ui/Resizable","tinymce/ui/FloatPanel","tinymce/ui/Window","tinymce/ui/MessageBox","tinymce/WindowManager","tinymce/ui/Tooltip","tinymce/ui/Widget","tinymce/ui/Progress","tinymce/ui/Notification","tinymce/NotificationManager","tinymce/EditorObservable","tinymce/Shortcuts","tinymce/Editor","tinymce/util/I18n","tinymce/FocusManager","tinymce/EditorManager","tinymce/util/XHR","tinymce/util/JSON","tinymce/util/JSONRequest","tinymce/util/JSONP","tinymce/util/LocalStorage","tinymce/Compat","tinymce/ui/Layout","tinymce/ui/AbsoluteLayout","tinymce/ui/Button","tinymce/ui/ButtonGroup","tinymce/ui/Checkbox","tinymce/ui/ComboBox","tinymce/ui/ColorBox","tinymce/ui/PanelButton","tinymce/ui/ColorButton","tinymce/util/Color","tinymce/ui/ColorPicker","tinymce/ui/Path","tinymce/ui/ElementPath","tinymce/ui/FormItem","tinymce/ui/Form","tinymce/ui/FieldSet","tinymce/ui/FilePicker","tinymce/ui/FitLayout","tinymce/ui/FlexLayout","tinymce/ui/FlowLayout","tinymce/ui/FormatControls","tinymce/ui/GridLayout","tinymce/ui/Iframe","tinymce/ui/InfoBox","tinymce/ui/Label","tinymce/ui/Toolbar","tinymce/ui/MenuBar","tinymce/ui/MenuButton","tinymce/ui/MenuItem","tinymce/ui/Throbber","tinymce/ui/Menu","tinymce/ui/ListBox","tinymce/ui/Radio","tinymce/ui/ResizeHandle","tinymce/ui/SelectBox","tinymce/ui/Slider","tinymce/ui/Spacer","tinymce/ui/SplitButton","tinymce/ui/StackLayout","tinymce/ui/TabPanel","tinymce/ui/TextBox"]);
+expose(["tinymce/geom/Rect","tinymce/util/Promise","tinymce/util/Delay","tinymce/Env","tinymce/dom/EventUtils","tinymce/dom/Sizzle","tinymce/util/Tools","tinymce/dom/DomQuery","tinymce/html/Styles","tinymce/dom/TreeWalker","tinymce/html/Entities","tinymce/dom/DOMUtils","tinymce/dom/ScriptLoader","tinymce/AddOnManager","tinymce/dom/RangeUtils","tinymce/html/Node","tinymce/html/Schema","tinymce/html/SaxParser","tinymce/html/DomParser","tinymce/html/Writer","tinymce/html/Serializer","tinymce/dom/Serializer","tinymce/util/VK","tinymce/dom/ControlSelection","tinymce/dom/BookmarkManager","tinymce/dom/Selection","tinymce/Formatter","tinymce/UndoManager","tinymce/EditorCommands","tinymce/util/URI","tinymce/util/Class","tinymce/util/EventDispatcher","tinymce/util/Observable","tinymce/ui/Selector","tinymce/ui/Collection","tinymce/ui/ReflowQueue","tinymce/ui/Control","tinymce/ui/Factory","tinymce/ui/KeyboardNavigation","tinymce/ui/Container","tinymce/ui/DragHelper","tinymce/ui/Scrollable","tinymce/ui/Panel","tinymce/ui/Movable","tinymce/ui/Resizable","tinymce/ui/FloatPanel","tinymce/ui/Window","tinymce/ui/MessageBox","tinymce/WindowManager","tinymce/ui/Tooltip","tinymce/ui/Widget","tinymce/ui/Progress","tinymce/ui/Notification","tinymce/NotificationManager","tinymce/EditorObservable","tinymce/Shortcuts","tinymce/Editor","tinymce/util/I18n","tinymce/FocusManager","tinymce/EditorManager","tinymce/util/XHR","tinymce/util/JSON","tinymce/util/JSONRequest","tinymce/util/JSONP","tinymce/util/LocalStorage","tinymce/Compat","tinymce/ui/Layout","tinymce/ui/AbsoluteLayout","tinymce/ui/Button","tinymce/ui/ButtonGroup","tinymce/ui/Checkbox","tinymce/ui/ComboBox","tinymce/ui/ColorBox","tinymce/ui/PanelButton","tinymce/ui/ColorButton","tinymce/util/Color","tinymce/ui/ColorPicker","tinymce/ui/Path","tinymce/ui/ElementPath","tinymce/ui/FormItem","tinymce/ui/Form","tinymce/ui/FieldSet","tinymce/ui/FilePicker","tinymce/ui/FitLayout","tinymce/ui/FlexLayout","tinymce/ui/FlowLayout","tinymce/ui/FormatControls","tinymce/ui/GridLayout","tinymce/ui/Iframe","tinymce/ui/InfoBox","tinymce/ui/Label","tinymce/ui/Toolbar","tinymce/ui/MenuBar","tinymce/ui/MenuButton","tinymce/ui/MenuItem","tinymce/ui/Throbber","tinymce/ui/Menu","tinymce/ui/ListBox","tinymce/ui/Radio","tinymce/ui/ResizeHandle","tinymce/ui/SelectBox","tinymce/ui/Slider","tinymce/ui/Spacer","tinymce/ui/SplitButton","tinymce/ui/StackLayout","tinymce/ui/TabPanel","tinymce/ui/TextBox"]);
 })(this);
 /**
  * theme.js
@@ -108812,7 +108904,7 @@ tinymce.ThemeManager.add('modern', function(editor) {
 			editor.contextToolbars = {};
 		});
 
-		editor.shortcuts.add('ctrl+alt+e > ctrl+alt+p', '', function() {
+		editor.shortcuts.add('ctrl+shift+e > ctrl+shift+p', '', function() {
 			var match = findFrontMostMatch(editor.selection.getNode());
 			if (match && match.toolbar.panel) {
 				match.toolbar.panel.items()[0].focus();
@@ -113404,7 +113496,7 @@ tinymce.PluginManager.add('textcolor', function(editor) {
 		backcolor: editor.settings.backcolor_rows || editor.settings.textcolor_rows || 5
 	};
 	cols = {
-		forecolor: editor.settings.forecolor_cols || editor.settings.textcolor_rows || 5,
+		forecolor: editor.settings.forecolor_cols || editor.settings.textcolor_cols || 8,
 		backcolor: editor.settings.backcolor_cols || editor.settings.textcolor_cols || 8
 	};
 
@@ -117893,7 +117985,7 @@ _html2canvas.Renderer.Canvas = function(options) {
 					realdocument = $document[0];
 
 				var originalCol, originalRow;
-				var inputTags = ['select', 'input', 'textarea', 'button'];
+				var inputTags = ['select', 'option', 'input', 'textarea', 'button'];
 
 				function mouseDown(e) {
 					if (inputTags.indexOf(e.target.nodeName.toLowerCase()) !== -1) {
@@ -117915,6 +118007,33 @@ _html2canvas.Renderer.Canvas = function(options) {
 					// only works if you have jQuery
 					if ($target.closest && $target.closest('.gridster-no-drag').length) {
 						return false;
+					}
+
+					// apply drag handle filter
+					if (gridster.draggable && gridster.draggable.handle) {
+						var $dragHandles = angular.element($el[0].querySelectorAll(gridster.draggable.handle));
+						var match = false;
+						outerloop:
+							for (var h = 0, hl = $dragHandles.length; h < hl; ++h) {
+								var handle = $dragHandles[h];
+								if (handle === e.target) {
+									match = true;
+									break;
+								}
+								for (var p = 0; p < 20; ++p) {
+									var parent = e.target.parentNode;
+									if (parent === $el[0]) {
+										break;
+									}
+									if (parent === handle) {
+										match = true;
+										break outerloop;
+									}
+								}
+							}
+						if (!match) {
+							return false;
+						}
 					}
 
 					switch (e.which) {
@@ -118025,8 +118144,8 @@ _html2canvas.Renderer.Canvas = function(options) {
 						scrollSensitivity = gridster.draggable.scrollSensitivity,
 						scrollSpeed = gridster.draggable.scrollSpeed;
 
-					var row = gridster.pixelsToRows(elmY);
-					var col = gridster.pixelsToColumns(elmX);
+					var row = Math.min(gridster.pixelsToRows(elmY), gridster.maxRows - 1);
+					var col = Math.min(gridster.pixelsToColumns(elmX), gridster.columns - 1);
 
 					var itemsInTheWay = gridster.getItems(row, col, item.sizeX, item.sizeY, item);
 					var hasItemsInTheWay = itemsInTheWay.length !== 0;
@@ -118097,8 +118216,8 @@ _html2canvas.Renderer.Canvas = function(options) {
 
 				function dragStop(event) {
 					$el.removeClass('gridster-item-moving');
-					var row = gridster.pixelsToRows(elmY);
-					var col = gridster.pixelsToColumns(elmX);
+					var row = Math.min(gridster.pixelsToRows(elmY), gridster.maxRows - 1);
+					var col = Math.min(gridster.pixelsToColumns(elmX), gridster.columns - 1);
 					if (gridster.pushing !== false || gridster.getItems(row, col, item.sizeX, item.sizeY, item).length === 0) {
 						item.row = row;
 						item.col = col;
@@ -118114,43 +118233,21 @@ _html2canvas.Renderer.Canvas = function(options) {
 				}
 
 				var enabled = null;
-				var $dragHandles = null;
-				var unifiedInputs = [];
+				var gridsterTouch = null;
 
 				this.enable = function() {
 					if (enabled === true) {
 						return;
 					}
-
 					enabled = true;
 
-					// timeout required for some template rendering
-					$el.ready(function() {
-						if (enabled !== true) {
-							return;
-						}
+					if (gridsterTouch) {
+						gridsterTouch.enable();
+						return;
+					}
 
-						// disable any existing draghandles
-						for (var u = 0, ul = unifiedInputs.length; u < ul; ++u) {
-							unifiedInputs[u].disable();
-						}
-						unifiedInputs = [];
-
-						if (gridster.draggable && gridster.draggable.handle) {
-							$dragHandles = angular.element($el[0].querySelectorAll(gridster.draggable.handle));
-							if ($dragHandles.length === 0) {
-								// fall back to element if handle not found...
-								$dragHandles = $el;
-							}
-						} else {
-							$dragHandles = $el;
-						}
-
-						for (var h = 0, hl = $dragHandles.length; h < hl; ++h) {
-							unifiedInputs[h] = new GridsterTouch($dragHandles[h], mouseDown, mouseMove, mouseUp);
-							unifiedInputs[h].enable();
-						}
-					});
+					gridsterTouch = new GridsterTouch($el[0], mouseDown, mouseMove, mouseUp);
+					gridsterTouch.enable();
 				};
 
 				this.disable = function() {
@@ -118159,12 +118256,9 @@ _html2canvas.Renderer.Canvas = function(options) {
 					}
 
 					enabled = false;
-
-					for (var u = 0, ul = unifiedInputs.length; u < ul; ++u) {
-						unifiedInputs[u].disable();
+					if (gridsterTouch) {
+						gridsterTouch.disable();
 					}
-
-					unifiedInputs = [];
 				};
 
 				this.toggle = function(enabled) {
